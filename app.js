@@ -444,6 +444,7 @@
 let regionChart;
 let reasonChart;
 let monthlyStackedChart;
+let monthlyComplianceChart;
 
 function getQuarter(month) {
 
@@ -513,6 +514,309 @@ function getFiscalYear(
 
     return `FY${year}`;
 
+}
+
+function updateMonthlyComplianceChart(data) {
+
+    const monthlyCanvas =
+        document.getElementById("monthlyChart");
+
+    if (!monthlyCanvas) {
+        console.error(
+            'Canvas id="monthlyChart" was not found.'
+        );
+        return;
+    }
+
+    const monthOrder = [
+        "October",
+        "November",
+        "December",
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September"
+    ];
+
+    // Only show months that exist
+    // in the currently filtered data
+    const months =
+        [...new Set(
+            data
+                .map(row =>
+                    String(row.Month || "").trim()
+                )
+                .filter(Boolean)
+        )]
+            .sort(
+                (a, b) =>
+                    monthOrder.indexOf(a) -
+                    monthOrder.indexOf(b)
+            );
+
+    // ============================
+    // Overall monthly compliance
+    // ============================
+
+    const monthlyCompliance =
+        months.map(month => {
+
+            const monthData =
+                data.filter(row =>
+                    String(row.Month || "").trim() === month
+                );
+
+            const total =
+                monthData.length;
+
+            const onTime =
+                monthData.filter(row =>
+                    String(row.Status || "")
+                        .trim()
+                        .toLowerCase() === "on time"
+                ).length;
+
+            if (total === 0) {
+                return null;
+            }
+
+            return Number(
+                (
+                    onTime /
+                    total *
+                    100
+                ).toFixed(2)
+            );
+        });
+
+
+    // ============================
+    // Regional compliance
+    // ============================
+
+    const regions = [
+        "Americas",
+        "APAC",
+        "EMEA"
+    ];
+
+    const regionColors = {
+        Americas: "#0057B8",
+        APAC: "#F4B400",
+        EMEA: "#19B6C8"
+    };
+
+    const regionalDatasets =
+        regions.map(region => {
+
+            const regionCompliance =
+                months.map(month => {
+
+                    const regionMonthData =
+                        data.filter(row => {
+
+                            const rowMonth =
+                                String(
+                                    row.Month || ""
+                                ).trim();
+
+                            const rowRegion =
+                                String(
+                                    row.Region || ""
+                                ).trim();
+
+                            return (
+                                rowMonth === month &&
+                                rowRegion === region
+                            );
+                        });
+
+                    const total =
+                        regionMonthData.length;
+
+                    if (total === 0) {
+                        return null;
+                    }
+
+                    const onTime =
+                        regionMonthData.filter(row =>
+                            String(row.Status || "")
+                                .trim()
+                                .toLowerCase() ===
+                            "on time"
+                        ).length;
+
+                    return Number(
+                        (
+                            onTime /
+                            total *
+                            100
+                        ).toFixed(2)
+                    );
+                });
+
+            return {
+                label: region,
+                data: regionCompliance,
+                borderColor:
+                    regionColors[region],
+                backgroundColor:
+                    regionColors[region],
+                borderWidth: 3,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                tension: 0.3,
+                fill: false,
+                spanGaps: false
+            };
+        });
+
+
+    // ============================
+    // Destroy old chart
+    // ============================
+
+    if (monthlyComplianceChart) {
+        monthlyComplianceChart.destroy();
+    }
+
+
+    // ============================
+    // Create refreshed chart
+    // ============================
+
+    monthlyComplianceChart =
+        new Chart(monthlyCanvas, {
+
+            type: "line",
+
+            data: {
+
+                labels: months,
+
+                datasets: [
+
+                    {
+                        label: "Overall",
+                        data: monthlyCompliance,
+                        borderColor: "#000000",
+                        backgroundColor: "#000000",
+                        borderWidth: 3,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        tension: 0.3,
+                        fill: false,
+                        spanGaps: false
+                    },
+
+                    ...regionalDatasets
+                ]
+            },
+
+            options: {
+
+                responsive: true,
+                maintainAspectRatio: false,
+
+                interaction: {
+                    intersect: false,
+                    mode: "index"
+                },
+
+                plugins: {
+
+                    legend: {
+                        display: true,
+                        position: "top",
+
+                        labels: {
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: 12,
+
+                            font: {
+                                size: 11
+                            }
+                        }
+                    },
+
+                    tooltip: {
+
+                        callbacks: {
+
+                            label: function (context) {
+
+                                const value =
+                                    context.parsed.y;
+
+                                if (
+                                    value === null ||
+                                    value === undefined
+                                ) {
+                                    return (
+                                        context.dataset.label +
+                                        ": No reports"
+                                    );
+                                }
+
+                                return (
+                                    context.dataset.label +
+                                    ": " +
+                                    value +
+                                    "% on time"
+                                );
+                            }
+                        }
+                    }
+                },
+
+                scales: {
+
+                    y: {
+
+                        beginAtZero: true,
+                        max: 100,
+
+                        ticks: {
+                            color: "#0B57B7",
+
+                            callback: value =>
+                                value + "%"
+                        },
+
+                        title: {
+                            color: "#0B57B7",
+                            display: true,
+                            text:
+                                "On-Time Compliance"
+                        }
+                    },
+
+                    x: {
+
+                        ticks: {
+                            color: "#0B57B7"
+                        },
+
+                        grid: {
+                            display: false
+                        },
+
+                        title: {
+                            color: "#0B57B7",
+                            display: true,
+                            text:
+                                "Reporting Month"
+                        }
+                    }
+                }
+            }
+        });
 }
 
 
@@ -671,6 +975,7 @@ fetch("Delay_Dashboard4.json")
         updateReasonChart(getReasonChartData());
         updateReasonSummaryTable(normalizedData);
         updateMonthlyStackedChart(normalizedData);
+        updateMonthlyComplianceChart(normalizedData);
 
         console.log(monthFilter.innerHTML);
 
@@ -736,6 +1041,8 @@ fetch("Delay_Dashboard4.json")
             updateRegionChart(filteredData);
             updateReasonChart(getReasonChartData());
             updateReasonSummaryTable(filteredData);
+            updateMonthlyStackedChart(filteredData);
+            updateMonthlyComplianceChart(filteredData);
 
             console.log(filteredData);
 
@@ -970,178 +1277,7 @@ fetch("Delay_Dashboard4.json")
         // 5. Build monthly summary
         // -----------------------------
 
-        const monthSummary = {};
-
-        normalizedData.forEach(row => {
-
-            const month = row.Month;
-
-            if (!monthSummary[month]) {
-                monthSummary[month] = {
-                    total: 0,
-                    onTime: 0
-                };
-            }
-
-            monthSummary[month].total++;
-
-            if (row.Status === "on time") {
-                monthSummary[month].onTime++;
-            }
-        });
-
-
-        // -----------------------------
-        // 6. Sort months correctly
-        // -----------------------------
-
-        const monthOrder = [
-            "October",
-            "November",
-            "December",
-            "January",
-            "February",
-            "March",
-            "April",
-            "May",
-            "June",
-            "July",
-            "August",
-            "September"
-
-        ];
-
-        const months = Object.keys(monthSummary).sort(
-            (firstMonth, secondMonth) =>
-                monthOrder.indexOf(firstMonth) -
-                monthOrder.indexOf(secondMonth)
-        );
-
-
-        // -----------------------------
-        // 7. Calculate monthly compliance
-        // -----------------------------
-
-        const monthlyCompliance = months.map(month => {
-
-            const summary = monthSummary[month];
-
-            if (!summary || summary.total === 0) {
-                return 0;
-            }
-
-            return Number(
-                (
-                    summary.onTime /
-                    summary.total *
-                    100
-                ).toFixed(2)
-            );
-        });
-
-        console.log("Month summary:", monthSummary);
-        console.log("Months:", months);
-        console.log(
-            "Monthly compliance:",
-            monthlyCompliance
-        );
-
-
-        // -----------------------------
-        // 8. Validate Chart.js and canvas
-        // -----------------------------
-
-        const monthlyCanvas =
-            document.getElementById("monthlyChart");
-
-        if (!monthlyCanvas) {
-            throw new Error(
-                'The canvas id="monthlyChart" was not found in the HTML.'
-            );
-        }
-
-        if (typeof Chart === "undefined") {
-            throw new Error(
-                "Chart.js is not loaded. Check the Chart.js script element in new.html."
-            );
-        }
-
-
-        const regions = [
-            "Americas",
-            "APAC",
-            "EMEA"
-        ];
-
-        const regionColors = {
-
-            APAC: "#F4B400",       // Light Blue
-
-            EMEA: "#19B6C8",       // Dark Blue
-
-            Americas: "#0057B8"   // Orange
-
-        };
-
-
-        const regionalDatasets = [];
-
-        regions.forEach(region => {
-
-            const regionCompliance = months.map(month => {
-
-                const regionMonthData = normalizedData.filter(
-                    row =>
-                        row.Month === month &&
-                        row.Region === region
-                );
-
-                const total =
-                    regionMonthData.length;
-
-                const onTime =
-                    regionMonthData.filter(
-                        row =>
-                            row.Status === "on time"
-                    ).length;
-
-                return total === 0
-                    ? null
-                    : Number(
-                        (
-                            onTime /
-                            total *
-                            100
-                        ).toFixed(2)
-                    );
-
-            });
-
-            regionalDatasets.push({
-
-                label: region,
-
-                data: regionCompliance,
-
-                borderColor:
-                    regionColors[region],
-
-                backgroundColor:
-                    regionColors[region],
-
-                borderWidth: 3,
-
-                pointRadius: 2,
-
-                pointHoverRadius: 4,
-
-                tension: 0.3,
-
-                fill: false
-
-            });
-
-        });
+      
 
 
         // -----------------------------
